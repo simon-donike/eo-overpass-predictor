@@ -48,7 +48,7 @@ This repository answers that question geometrically and, for Sentinel-2, against
 
 ## ⚡ Core Features
 
-As with the companion [CDSE download pipelines](#-related), this is a transparent **Clone-and-Run Toolkit**: sequential Jupyter notebooks over one documented helper module, rather than a black-box package.
+The workflow is available as an installable Python package with documented functions and sequential Jupyter notebooks. The notebooks and programmatic API use the same prediction engine.
 
 * **Swath-Aware Overpass Prediction**: SGP4 propagation (Skyfield) with a 30 s coarse scan and 1 s refinement. Cross-track scan lines (MSI ≈ 290 km, OLI ≈ 185 km) are built geodesically from the ground-track heading and intersected with the ROI in an **ROI-centred Lambert equal-area projection**, giving ROI entry/exit times, the closest-approach (scene-centre) time, and the true **% of the ROI imaged**.
 * **Acquisition Realism**: Keeps only **daytime descending** passes inside each mission's latitude limits by default. Every pass carries direction, nadir offset, side of track, view angle, an **edge margin** that flags marginal swath-edge passes, solar elevation, and TLE age.
@@ -58,7 +58,7 @@ As with the companion [CDSE download pipelines](#-related), this is a transparen
 * **Resilient TLE Retrieval**: CelesTrak GP with a mirror fallback, a 12-hour on-disk cache, offline use of the last cache, and paste-in TLEs (column spacing collapsed by web pages is rebuilt and checksum-verified).
 * **Reporting**: Summary tables, an n2yo-style next-pass countdown, Esri footprint maps, a pass timeline chart, **CSV** (UTC + local ISO-8601 with explicit offsets) and **GeoPackage** footprints for QGIS/ArcGIS.
 * **Live View, Two Ways**: an **ipyleaflet tracker** in Jupyter (positions, past/future ground tracks, live swath, day/night terminator, UTC and ROI-local clocks, countdown), and a **standalone HTML tracker** that propagates the orbits in the browser — no Python needed to view or share it.
-* **Turnkey Environment**: The same Conda/Jupyter environment builder as the CDSE pipelines.
+* **Reproducible Environment**: uv with a committed lockfile, optional notebook dependencies, and a supported Conda/Jupyter environment builder.
 
 ---
 
@@ -108,6 +108,19 @@ eo-overpass-predictor/
 ├── p00_overpass_env_setup.ipynb       # Step 0: Turnkey workspace & kernel initialisation
 ├── p01_overpass_prediction.ipynb      # Step 1: ROI → TLEs → swath-aware prediction → ESA plan check → CSV
 ├── p02_overpass_live_tracker.ipynb    # Step 2: Live ipyleaflet tracker + standalone HTML tracker
+├── pyproject.toml                    # Package metadata and primary dependency definitions
+├── uv.lock                           # Reproducible uv environment (Python 3.11 by default)
+├── src/eo_overpass_predictor/
+│   ├── __init__.py                   # Public Python API
+│   ├── tle.py                       # TLE parsing, retrieval and caching
+│   ├── roi.py                       # ROI loading, projections and time zones
+│   ├── predict.py                   # Orbit propagation and swath intersection
+│   ├── export.py                    # Summary tables, countdowns, CSV and vector output
+│   ├── esa_plans.py                 # ESA acquisition plans and cross-checks
+│   ├── visualisation.py             # Optional Folium maps and Matplotlib timelines
+│   ├── tracker.py                   # Jupyter live tracker and standalone HTML export
+│   └── resources/                   # Tracker HTML template and Natural Earth coastline
+├── tests/                            # Package integration and compatibility checks
 │
 ├── DATA/
 │   ├── SHP/                           # Your ROI vector files (example: Port Phillip Bay, EPSG:32755)
@@ -119,9 +132,7 @@ eo-overpass-predictor/
 ├── Tools/
 │   ├── env.base.yml                   # Conda environment definition (conda-forge)
 │   ├── overpass_env_builder.py        # Conda & Jupyter lifecycle automation
-│   ├── overpass_helper_utility.py     # TLEs, propagation, swath intersection, time zones, plans, reports, live view
-│   ├── live_tracker_template.html     # Standalone tracker page template (satellite.js, canvas)
-│   └── world_land_50m.json            # Natural Earth 1:50m land, compacted for the standalone tracker
+│   └── overpass_helper_utility.py     # Compatibility imports for one release
 │
 └── Example/
     ├── CSV/                           # Sample overpass report
@@ -130,11 +141,36 @@ eo-overpass-predictor/
 
 ## 🚀 Execution Workflow
 
-### Step 0: Workspace Initialisation
-Open and execute `p00_overpass_env_setup.ipynb`. It builds the `overpass` Conda environment from `Tools/env.base.yml` (conda-forge), registers the **`Python (Overpass)`** kernel, and audits the kernel-to-environment mapping.
+### Step 0: Install with uv
+
+[Install uv](https://docs.astral.sh/uv/getting-started/installation/), then run these commands from the repository root:
+
+```bash
+uv sync --extra notebooks
+uv run --extra notebooks jupyter lab
+```
+
+uv creates `.venv`, installs the project in editable mode and uses `uv.lock` to resolve dependencies. The repository defaults to Python 3.11; uv downloads it if necessary. Keep `--extra notebooks` on the launch command so uv retains the notebook dependencies. Open p01 or p02 and select the **Python 3 (ipykernel)** kernel from this environment. Run the notebooks from the repository root so the example data and output paths resolve correctly.
+
+For a core-only environment, use `uv sync --no-dev`. Maps, timelines and Jupyter widgets require the `notebooks` extra; standalone HTML tracker export works with the core install.
+
+### Alternative: Conda
+
+With Miniconda or Anaconda installed:
+
+```bash
+conda env create -f Tools/env.base.yml
+conda activate overpass
+python -m pip install -e . --no-deps
+jupyter lab
+```
+
+Update an existing environment with `conda env update -n overpass -f Tools/env.base.yml`. Conda supplies the dependencies, including geospatial libraries; pip installs only this package. `pyproject.toml` is the primary dependency list and `Tools/env.base.yml` mirrors the core and notebook dependencies.
+
+Alternatively, `p00_overpass_env_setup.ipynb` remains the automated conda setup route. It creates or updates the environment, installs the local package, registers the **Python (Overpass)** kernel and checks the kernel mapping. p00 is not required for uv.
 
 ### Step 1: Overpass Prediction & Report
-Open `p01_overpass_prediction.ipynb` with the `Python (Overpass)` kernel.
+Open `p01_overpass_prediction.ipynb` with the kernel from the environment installed above.
 
 * Point `ROI_SHP_PATH` at your study area (any CRS), or pass a point or bounding box to `load_roi`.
 * Check the resolved time zone. Override it if the ROI spans zones.
@@ -148,6 +184,41 @@ Open `p01_overpass_prediction.ipynb` with the `Python (Overpass)` kernel.
 Open `p02_overpass_live_tracker.ipynb`. Run the tracker cell for a live ipyleaflet map that updates every 2 s and leaves the notebook usable; stop it with the **Live** toggle or `TRACKER.stop()`. Export the standalone page to watch or share the live view in any browser.
 
 ---
+
+## Python API
+
+Install the checkout with `python -m pip install .` (core) or `python -m pip install '.[notebooks]'` (interactive workflows). Run the following example in that environment, or with `uv run python your_script.py`:
+
+```python
+from eo_overpass_predictor import (
+    export_overpass_csv,
+    fetch_tles,
+    load_roi,
+    predict_overpasses,
+)
+
+roi = load_roi((144.35, -38.35, 145.15, -37.80), name="Port_Phillip_Bay")
+tles = fetch_tles(satellites=["L8", "L9", "S2B", "S2C"])
+passes = predict_overpasses(roi, tles, days=14)
+csv_path = export_overpass_csv(passes, out_dir="reports")
+```
+
+Public functions are re-exported from `eo_overpass_predictor`; their docstrings describe arguments, returned GeoDataFrames and output formats. Imports through `Tools/overpass_helper_utility.py` continue to work for one release after installing the package. New code should import from the package directly.
+
+When cache paths are omitted, TLEs and ESA plans use `eo-overpass-predictor/tle` and `eo-overpass-predictor/kml` inside the platform user cache: `$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS, and `%LOCALAPPDATA%` on Windows. Pass `tle_dir`, `plan_dir` or `source` to override these defaults. The notebooks explicitly retain their repository-local `DATA/TLE` and `DATA/KML` caches. Input paths and export destinations are used as supplied; pass absolute paths in applications that change their working directory.
+
+The CLI and JSON report format are planned as separate contributions.
+
+## Development checks
+
+```bash
+uv sync --extra notebooks
+uv run --extra notebooks pytest
+uv run --extra notebooks ruff check src tests Tools/overpass_helper_utility.py
+uv build
+```
+
+The package checks cover core imports without notebook dependencies, legacy imports, cache paths, resource loading and dependency-list parity with conda. Scientific regression fixtures and reference outputs will be added separately before the restructuring is merged upstream.
 
 ## 📋 CSV Report Columns
 
@@ -176,8 +247,9 @@ Open `p02_overpass_live_tracker.ipynb`. Run the tracker cell for a live ipyleafl
 * **Network access** to `celestrak.org` (or the TLE mirror) and, for the plan check, `sentinels.copernicus.eu` is needed at run time. The standalone tracker loads `satellite.js` from jsDelivr.
 
 ## 📋 Requirements
-* An existing installation of Miniconda / Anaconda.
-* Python 3.11 (built by `p00`). Key libraries: Skyfield (SGP4), GeoPandas/Shapely 2, pyproj, timezonefinder, Folium, ipyleaflet.
+* Python 3.11 or newer; the uv and conda workflows default to 3.11.
+* uv (recommended) or Miniconda / Anaconda for environment setup.
+* Core libraries: Skyfield (SGP4), NumPy, pandas, GeoPandas/Shapely 2, pyproj, timezonefinder and requests. The `notebooks` extra adds JupyterLab, Folium, Matplotlib and widgets.
 * No account is needed: TLEs, ESA plans and the tracker's dependencies are public.
 
 ## 🔗 Related

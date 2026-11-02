@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "eo-overpass-predictor"
+version = "1.1.0.dev0"
+description = "Swath-aware Landsat and Sentinel-2 overpass prediction for a region of interest."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Julian Manning" }]
+dependencies = [
+    "skyfield",
+    "numpy",
+    "pandas>=2",
+    "geopandas>=0.14",
+    "shapely>=2",
+    "pyproj",
+    "timezonefinder",
+    "requests",
+    "tzdata; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "jupyterlab>=4",
+    "ipykernel>=6",
+    "ipywidgets>=8",
+    "ipyleaflet>=0.19",
+    "folium",
+    "matplotlib",
+    "pyyaml",
+]
+
+[project.urls]
+Repository = "https://github.com/julianManning/eo-overpass-predictor"
+Issues = "https://github.com/julianManning/eo-overpass-predictor/issues"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eo_overpass_predictor"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/Tools",
+    "/tests",
+    "/p0*.ipynb",
+    "/DATA/SHP",
+    "/Example",
+    "/CITATION.cff",
+    "/LICENSE",
+    "/README.md",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/.python-version",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# Keep the scientific implementation's formatting; catch broken imports and names.
+select = ["F", "I"]
